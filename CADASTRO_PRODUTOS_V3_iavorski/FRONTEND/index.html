@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cadastro de produtos</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>Cadastro de Produtos</h1>
+      <div class="foto-produto">
+        <img
+          src="/imagens/WhatsApp%20Image%202026-09-08%20at%2010.44.49.jpeg"
+          alt="Imagem de apresentação do cadastro de produtos"
+        />
+      </div>
+      <form id="produto-form">
+        <label>Nome: </label>
+        <input type="text" required id="nome" />
+
+        <label>Preço: </label>
+        <input type="number" required id="preco" min="0.01" step="0.01" />
+
+        <label>Quantidade: </label>
+        <input type="number" required id="quantidade" min="1" step="1" />
+
+        <button type="submit">Adicionar Produto</button>
+      </form>
+
+      <button id="limpar-tabela">Limpar tabela</button>
+
+      <h3 id="total-estoque">Total em estoque: R$ 0,00</h3>
+
+      <table id="tabela-produtos">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Preço</th>
+            <th>Quantidade</th>
+            <th>Valor total</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
