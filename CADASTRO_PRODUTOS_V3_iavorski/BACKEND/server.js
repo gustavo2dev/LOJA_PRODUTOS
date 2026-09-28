@@ -1,55 +1,100 @@
 require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
 
 const app = express();
 
-// Middlewares
+// -------------------------------------------------------------
+// MIDDLEWARES
+// -------------------------------------------------------------
+
 app.use(
   cors({
     origin: "*",
     methods: ["GET", "POST", "DELETE", "PUT", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
-  }),
+  })
 );
+
 app.use(express.json());
 
-// Servir arquivos estáticos
 app.use(express.static("public"));
 
-// Configuração de conexão com PostgreSQL (Supabase)
+// -------------------------------------------------------------
+// CONEXÃO COM SUPABASE / POSTGRESQL
+// -------------------------------------------------------------
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+
   ssl: {
-    rejectUnauthorized: false, // Exigido para conexão segura na nuvem
+    rejectUnauthorized: false,
   },
 });
 
-// Testar a conexão com o banco
+// Testar conexão
 pool
   .query("SELECT NOW()")
-  .then(() => console.log("Conectado com sucesso ao PostgreSQL (Supabase)"))
-  .catch((err) => console.error("Erro de conexão com o Supabase:", err.stack));
+  .then((result) => {
+    console.log("=================================");
+    console.log("CONEXÃO COM SUPABASE OK!");
+    console.log("Data do banco:", result.rows[0].now);
+    console.log("=================================");
+  })
+  .catch((erro) => {
+    console.error("ERRO AO CONECTAR AO SUPABASE:");
+    console.error(erro.message);
+  });
 
 // -------------------------------------------------------------
-// ROTAS
+// CRIAR TABELA
 // -------------------------------------------------------------
 
-// ROTA GET: Busca todos os produtos
+async function criarTabela() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS produtos (
+        id SERIAL PRIMARY KEY,
+        nome TEXT NOT NULL,
+        preco NUMERIC(10,2) NOT NULL,
+        quantidade INTEGER NOT NULL
+      )
+    `);
+
+    console.log("Tabela produtos verificada.");
+  } catch (erro) {
+    console.error("Erro ao criar tabela:", erro.message);
+  }
+}
+
+criarTabela();
+
+// -------------------------------------------------------------
+// GET - LISTAR PRODUTOS
+// -------------------------------------------------------------
+
 app.get("/produtos", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM produtos ORDER BY id ASC");
+    const result = await pool.query(
+      "SELECT * FROM produtos ORDER BY id ASC"
+    );
+
     res.json(result.rows);
   } catch (erro) {
     console.error("Erro ao buscar produtos:", erro);
-    res
-      .status(500)
-      .json({ erro: "Erro ao buscar produtos no banco de dados." });
+
+    res.status(500).json({
+      erro: "Erro ao buscar produtos no banco de dados.",
+    });
   }
 });
 
-// ROTA POST: Insere um novo produto
+// -------------------------------------------------------------
+// POST - ADICIONAR PRODUTO
+// -------------------------------------------------------------
+
 app.post("/produtos", async (req, res) => {
   const { nome, preco, quantidade } = req.body;
 
@@ -57,60 +102,84 @@ app.post("/produtos", async (req, res) => {
   const q = parseInt(quantidade, 10);
 
   if (!nome || isNaN(p) || isNaN(q) || p <= 0 || q <= 0) {
-    return res
-      .status(400)
-      .json({ erro: "Dados inválidos enviados para o servidor" });
+    return res.status(400).json({
+      erro: "Dados inválidos enviados para o servidor.",
+    });
   }
 
   try {
-    const query = `
-           INSERT INTO produtos(nome, preco, quantidade)
-           VALUES($1, $2, $3)
-           RETURNING *
-        `;
-    const values = [nome, p, q];
-    const result = await pool.query(query, values);
+    const result = await pool.query(
+      `
+      INSERT INTO produtos (nome, preco, quantidade)
+      VALUES ($1, $2, $3)
+      RETURNING *
+      `,
+      [nome, p, q]
+    );
 
     res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error("Erro ao salvar produto:", error);
-    res.status(500).json({ erro: "Erro interno ao salvar produto" });
+  } catch (erro) {
+    console.error("Erro ao salvar produto:", erro);
+
+    res.status(500).json({
+      erro: "Erro interno ao salvar produto.",
+    });
   }
 });
 
-// ROTA DELETE (Individual)
+// -------------------------------------------------------------
+// DELETE - EXCLUIR UM PRODUTO
+// -------------------------------------------------------------
+
 app.delete("/produtos/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await pool.query("DELETE FROM produtos WHERE id = $1", [id]);
+    const result = await pool.query(
+      "DELETE FROM produtos WHERE id = $1",
+      [id]
+    );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ erro: "Produto não encontrado" });
+      return res.status(404).json({
+        erro: "Produto não encontrado.",
+      });
     }
 
     res.status(204).send();
-  } catch (error) {
-    console.error("Erro ao deletar produto:", error);
-    res.status(500).json({ erro: "Erro ao deletar produto." });
+  } catch (erro) {
+    console.error("Erro ao deletar produto:", erro);
+
+    res.status(500).json({
+      erro: "Erro ao deletar produto.",
+    });
   }
 });
 
-// ROTA DELETE (Em lote)
+// -------------------------------------------------------------
+// DELETE - EXCLUIR TODOS
+// -------------------------------------------------------------
+
 app.delete("/produtos", async (req, res) => {
   try {
     await pool.query("DELETE FROM produtos");
+
     res.status(204).send();
-  } catch (error) {
-    console.error("Erro ao limpar produtos:", error);
-    res.status(500).json({ erro: "Erro ao limpar banco de dados." });
+  } catch (erro) {
+    console.error("Erro ao limpar produtos:", erro);
+
+    res.status(500).json({
+      erro: "Erro ao limpar banco de dados.",
+    });
   }
 });
 
 // -------------------------------------------------------------
-// INICIALIZAÇÃO DO SERVIDOR
+// SERVIDOR
 // -------------------------------------------------------------
+
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log(`Servidor backend rodando na porta ${PORT}`);
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
