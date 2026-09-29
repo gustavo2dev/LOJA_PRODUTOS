@@ -1,13 +1,20 @@
+// ============================================================
+// CLASSE PRODUTO
+// ============================================================
+
 class Produto {
   #preco;
   #quantidade;
 
   constructor(nome, preco, quantidade) {
-    const precoNumerico = parseFloat(preco);
-    const quantidadeNumerica = parseInt(quantidade, 10);
+    const nomeNormalizado =
+      typeof nome === "string" ? nome.trim() : "";
+
+    const precoNumerico = Number(preco);
+    const quantidadeNumerica = Number(quantidade);
 
     if (
-      !nome.trim() ||
+      !nomeNormalizado ||
       !Number.isFinite(precoNumerico) ||
       !Number.isInteger(quantidadeNumerica) ||
       precoNumerico <= 0 ||
@@ -16,7 +23,7 @@ class Produto {
       throw new Error("Dados inválidos para o produto");
     }
 
-    this.nome = nome;
+    this.nome = nomeNormalizado;
     this.#preco = precoNumerico;
     this.#quantidade = quantidadeNumerica;
   }
@@ -37,158 +44,477 @@ class Produto {
     return {
       nome: this.nome,
       preco: this.#preco,
-      quantidade: this.#quantidade,
+      quantidade: this.#quantidade
     };
   }
 }
+
+
+// ============================================================
+// CONFIGURAÇÃO DA API
+// ============================================================
+
+// Quando estiver na Vercel:
+// https://lojadeprodutos.vercel.app/produtos
+//
+// Quando abrir o HTML diretamente no computador:
+// http://localhost:3000/produtos
 
 const API_URL =
   window.location.protocol === "file:"
     ? "http://localhost:3000/produtos"
     : `${window.location.origin}/produtos`;
 
-// CADASTRAR PRODUTO
 
-document
-  .getElementById("produto-form")
-  .addEventListener("submit", async function (e) {
+// ============================================================
+// FUNÇÃO AUXILIAR PARA LER ERROS DO SERVIDOR
+// ============================================================
+
+async function obterMensagemErro(resposta, mensagemPadrao) {
+  try {
+    const dados = await resposta.json();
+
+    if (dados?.erro) {
+      return dados.erro;
+    }
+
+    if (dados?.message) {
+      return dados.message;
+    }
+  } catch (erro) {
+    // A resposta não era JSON.
+  }
+
+  return mensagemPadrao;
+}
+
+
+// ============================================================
+// CADASTRAR PRODUTO
+// ============================================================
+
+const formularioProduto = document.getElementById("produto-form");
+
+if (formularioProduto) {
+  formularioProduto.addEventListener("submit", async function (e) {
     e.preventDefault();
 
-    const nome = document.getElementById("nome").value;
-
-    const preco = document.getElementById("preco").value;
-
-    const quantidade = document.getElementById("quantidade").value;
+    const nome = document.getElementById("nome")?.value ?? "";
+    const preco = document.getElementById("preco")?.value ?? "";
+    const quantidade =
+      document.getElementById("quantidade")?.value ?? "";
 
     try {
-      const novoProduto = new Produto(nome, preco, quantidade);
+      // Cria o objeto usando a classe Produto
+      const novoProduto = new Produto(
+        nome,
+        preco,
+        quantidade
+      );
+
+      console.log("Enviando produto para:", API_URL);
 
       const resposta = await fetch(API_URL, {
         method: "POST",
 
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
 
-        body: JSON.stringify(novoProduto.toJSON()),
+        body: JSON.stringify(
+          novoProduto.toJSON()
+        )
       });
 
       if (!resposta.ok) {
-        const erroDoServidor = await resposta.json().catch(() => null);
-
-        throw new Error(
-          erroDoServidor?.erro ||
-            "Erro ao salvar o produto no servidor backend",
+        const mensagem = await obterMensagemErro(
+          resposta,
+          `Erro ao salvar produto. Código HTTP: ${resposta.status}`
         );
+
+        throw new Error(mensagem);
       }
 
+      const produtoCriado = await resposta.json();
+
+      console.log(
+        "Produto cadastrado:",
+        produtoCriado
+      );
+
+      // Atualiza a tabela
       await renderizarTabela();
 
-      e.target.reset();
+      // Limpa o formulário
+      formularioProduto.reset();
+
+      alert("Produto cadastrado com sucesso!");
+
     } catch (erro) {
-      alert(erro.message);
+      console.error(
+        "Erro ao cadastrar produto:",
+        erro
+      );
+
+      alert(
+        erro.message ||
+        "Não foi possível cadastrar o produto."
+      );
     }
   });
+}
 
-// MOSTRAR PRODUTOS
+
+// ============================================================
+// BUSCAR E MOSTRAR PRODUTOS
+// ============================================================
 
 async function renderizarTabela() {
   try {
-    const resposta = await fetch(API_URL);
+    console.log(
+      "Buscando produtos em:",
+      API_URL
+    );
 
+    const resposta = await fetch(API_URL, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json"
+      },
+      cache: "no-store"
+    });
+
+    // Mostra o erro real retornado pelo backend
     if (!resposta.ok) {
-      throw new Error("Não foi possível buscar os produtos no servidor");
+      const mensagem = await obterMensagemErro(
+        resposta,
+        `Erro ao buscar produtos. Código HTTP: ${resposta.status}`
+      );
+
+      throw new Error(mensagem);
     }
 
-    const dadosBrutosDoServidor = await resposta.json();
+    const dadosBrutosDoServidor =
+      await resposta.json();
 
     if (!Array.isArray(dadosBrutosDoServidor)) {
-      throw new Error("Resposta inválida recebida do servidor");
+      throw new Error(
+        "Resposta inválida recebida do servidor."
+      );
     }
 
-    const tabela = document.querySelector("#tabela-produtos tbody");
+    const tabela = document.querySelector(
+      "#tabela-produtos tbody"
+    );
+
+    if (!tabela) {
+      console.error(
+        "Não foi encontrada a tabela #tabela-produtos tbody."
+      );
+
+      return;
+    }
 
     tabela.innerHTML = "";
 
     let totalAcumulado = 0;
 
     dadosBrutosDoServidor.forEach((dados) => {
-      const produto = new Produto(dados.nome, dados.preco, dados.quantidade);
+      try {
+        const produto = new Produto(
+          dados.nome,
+          dados.preco,
+          dados.quantidade
+        );
 
-      totalAcumulado += produto.valorTotal();
+        totalAcumulado += produto.valorTotal();
 
-      const row = document.createElement("tr");
+        const row =
+          document.createElement("tr");
 
-      row.innerHTML = `
-                <td>${produto.nome}</td>
-                <td>R$ ${produto.preco.toFixed(2)}</td>
-                <td>${produto.quantidade}</td>
-                <td>R$ ${produto.valorTotal().toFixed(2)}</td>
-                <td>
-                    <button type="button">
-                        Apagar
-                    </button>
-                </td>
-            `;
+        // Nome
+        const tdNome =
+          document.createElement("td");
 
-      const botao = row.querySelector("button");
+        tdNome.textContent =
+          produto.nome;
 
-      botao.addEventListener("click", () => deletarProduto(dados.id));
+        // Preço
+        const tdPreco =
+          document.createElement("td");
 
-      tabela.appendChild(row);
+        tdPreco.textContent =
+          `R$ ${produto.preco.toFixed(2)}`;
+
+        // Quantidade
+        const tdQuantidade =
+          document.createElement("td");
+
+        tdQuantidade.textContent =
+          produto.quantidade;
+
+        // Valor total
+        const tdTotal =
+          document.createElement("td");
+
+        tdTotal.textContent =
+          `R$ ${produto.valorTotal().toFixed(2)}`;
+
+        // Ações
+        const tdAcoes =
+          document.createElement("td");
+
+        const botao =
+          document.createElement("button");
+
+        botao.type = "button";
+        botao.textContent = "Apagar";
+
+        botao.addEventListener(
+          "click",
+          () => deletarProduto(dados.id)
+        );
+
+        tdAcoes.appendChild(botao);
+
+        // Monta a linha
+        row.appendChild(tdNome);
+        row.appendChild(tdPreco);
+        row.appendChild(tdQuantidade);
+        row.appendChild(tdTotal);
+        row.appendChild(tdAcoes);
+
+        tabela.appendChild(row);
+
+      } catch (erro) {
+        console.error(
+          "Produto inválido recebido do servidor:",
+          dados,
+          erro
+        );
+      }
     });
 
-    document.getElementById("total-estoque").textContent =
-      `Total em estoque: R$ ${totalAcumulado.toFixed(2)}`;
+    // Atualiza o valor total
+    const elementoTotal =
+      document.getElementById(
+        "total-estoque"
+      );
+
+    if (elementoTotal) {
+      elementoTotal.textContent =
+        `Total em estoque: R$ ${totalAcumulado.toFixed(2)}`;
+    }
+
   } catch (erro) {
-    console.error("Erro ao buscar dados no servidor:", erro);
+    console.error(
+      "Erro ao buscar dados no servidor:",
+      erro
+    );
+
+    const tabela = document.querySelector(
+      "#tabela-produtos tbody"
+    );
+
+    if (tabela) {
+      tabela.innerHTML = `
+        <tr>
+          <td colspan="5">
+            Erro ao carregar produtos.
+          </td>
+        </tr>
+      `;
+    }
   }
 }
 
+
+// ============================================================
 // APAGAR UM PRODUTO
+// ============================================================
 
 async function deletarProduto(id) {
-  if (id === undefined || id <= 0) {
+  const idNumerico = Number(id);
+
+  if (
+    !Number.isInteger(idNumerico) ||
+    idNumerico <= 0
+  ) {
+    console.error(
+      "ID de produto inválido:",
+      id
+    );
+
+    return;
+  }
+
+  const confirmar =
+    confirm(
+      "Tem certeza que deseja apagar este produto?"
+    );
+
+  if (!confirmar) {
     return;
   }
 
   try {
-    const resposta = await fetch(`${API_URL}/${id}`, {
-      method: "DELETE",
-    });
+    const resposta = await fetch(
+      `${API_URL}/${idNumerico}`,
+      {
+        method: "DELETE"
+      }
+    );
 
     if (!resposta.ok) {
-      const erroServidor = await resposta.json().catch(() => null);
+      const mensagem =
+        await obterMensagemErro(
+          resposta,
+          `Erro ao apagar produto. Código HTTP: ${resposta.status}`
+        );
 
-      throw new Error(erroServidor?.erro || "Erro ao apagar o produto");
+      throw new Error(mensagem);
     }
 
     await renderizarTabela();
+
   } catch (erro) {
-    console.error("Erro ao apagar produto:", erro);
+    console.error(
+      "Erro ao apagar produto:",
+      erro
+    );
+
+    alert(
+      erro.message ||
+      "Não foi possível apagar o produto."
+    );
   }
 }
 
-// APAGAR TODOS
 
-document
-  .getElementById("limpar-tabela")
-  .addEventListener("click", async function () {
-    try {
-      const resposta = await fetch(API_URL, {
-        method: "DELETE",
-      });
+// ============================================================
+// APAGAR TODOS OS PRODUTOS
+// ============================================================
 
-      if (!resposta.ok) {
-        throw new Error("Erro ao limpar produtos");
+const botaoLimpar =
+  document.getElementById(
+    "limpar-tabela"
+  );
+
+if (botaoLimpar) {
+  botaoLimpar.addEventListener(
+    "click",
+    async function () {
+
+      const confirmar =
+        confirm(
+          "Tem certeza que deseja apagar TODOS os produtos?"
+        );
+
+      if (!confirmar) {
+        return;
       }
 
-      await renderizarTabela();
-    } catch (erro) {
-      console.error("Erro ao limpar dados no servidor:", erro);
+      try {
+        const resposta =
+          await fetch(API_URL, {
+            method: "DELETE"
+          });
+
+        if (!resposta.ok) {
+          const mensagem =
+            await obterMensagemErro(
+              resposta,
+              `Erro ao limpar produtos. Código HTTP: ${resposta.status}`
+            );
+
+          throw new Error(mensagem);
+        }
+
+        await renderizarTabela();
+
+      } catch (erro) {
+        console.error(
+          "Erro ao limpar dados no servidor:",
+          erro
+        );
+
+        alert(
+          erro.message ||
+          "Não foi possível limpar os produtos."
+        );
+      }
     }
-  });
+  );
+}
 
+
+// ============================================================
+// TESTAR BACKEND
+// ============================================================
+
+async function verificarBackend() {
+  try {
+    const urlHealth =
+      window.location.protocol === "file:"
+        ? "http://localhost:3000/health"
+        : `${window.location.origin}/health`;
+
+    const resposta =
+      await fetch(urlHealth, {
+        method: "GET",
+        cache: "no-store"
+      });
+
+    if (!resposta.ok) {
+      console.warn(
+        "Backend respondeu com erro:",
+        resposta.status
+      );
+
+      return false;
+    }
+
+    const dados =
+      await resposta.json();
+
+    console.log(
+      "Backend funcionando:",
+      dados
+    );
+
+    return true;
+
+  } catch (erro) {
+    console.error(
+      "Backend não está acessível:",
+      erro
+    );
+
+    return false;
+  }
+}
+
+
+// ============================================================
 // INICIALIZAÇÃO
+// ============================================================
 
-renderizarTabela();
+document.addEventListener(
+  "DOMContentLoaded",
+  async () => {
+
+    console.log(
+      "Frontend iniciado."
+    );
+
+    console.log(
+      "API utilizada:",
+      API_URL
+    );
+
+    await verificarBackend();
+
+    await renderizarTabela();
+  }
+);
+
