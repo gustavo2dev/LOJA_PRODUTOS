@@ -1,31 +1,31 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Pool } = require("pg");
+require("dotenv").config();
 
-const dbPath = path.join(__dirname, 'DATA', 'estoque.db');
-
-const db = new sqlite3.Database(dbPath, (erro) => {
-    if (erro) {
-        console.error('Erro ao abrir banco:', erro.message);
-        return;
-    }
-
-    console.log('Banco de dados aberto com sucesso.');
+// Conecta usando a URL fornecida pelo Supabase
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false // Necessário para conexões externas com o Supabase
+  }
 });
 
-db.serialize(() => {
-    db.run(`
-        CREATE TABLE IF NOT EXISTS produtos(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            preco REAL NOT NULL,
-            quantidade INTEGER NOT NULL,
-            imagem LONGTEXT
-        )
-    `, (erro) => {
-        if (erro) {
-            console.error('Erro ao criar tabela produtos:', erro.message);
-        }
-    });
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error("Erro ao conectar ao banco de dados Supabase:", err.stack);
+  } else {
+    console.log("Banco de dados Supabase conectado com sucesso.");
+    release();
+  }
 });
 
-module.exports = db;
+// Criação da tabela (opcional: é recomendado fazer isso diretamente no painel do Supabase)
+pool.query(`
+  CREATE TABLE IF NOT EXISTS produtos(
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    preco NUMERIC NOT NULL,
+    quantidade INTEGER NOT NULL
+  )
+`).catch(err => console.error("Erro ao criar tabela:", err));
+
+module.exports = pool;
