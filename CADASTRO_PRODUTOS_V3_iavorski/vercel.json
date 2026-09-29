@@ -2,14 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "CADASTRO_PRODUTOS_V3_iavorski/BACKEND/server.js",
+      "src": "BACKEND/server.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "CADASTRO_PRODUTOS_V3_iavorski/BACKEND/server.js"
+      "dest": "BACKEND/server.js"
     }
   ]
 }
